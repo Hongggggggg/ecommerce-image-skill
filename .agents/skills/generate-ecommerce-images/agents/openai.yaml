@@ -1,0 +1,4 @@
+interface:
+  display_name: "高转化电商套图生成"
+  short_description: "规划图片类型，并由 AI 整图生成差异化电商套图"
+  default_prompt: "使用 $generate-ecommerce-images 根据我的商品资料确认市场、语言、风格和图片类型，先规划构图与信息层级，再由图像模型整图生成；按最终成图实际检查文字、组件、证据、尺寸语义和结构指纹。禁止脚本排版、后期叠字和像素合成。"
