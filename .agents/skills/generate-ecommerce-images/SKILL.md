@@ -11,6 +11,8 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 
 目标不是“商品照片加标题”，而是一套按购买决策顺序推进、商品身份稳定、信息丰富但不拥挤、在 180～240 px 缩略图下仍可读的 1:1 电商图片。
 
+目标冲突时依次保证：事实、法规、平台合规与商品身份；顾客理解、信任与退货风险降低；三秒理解和点击潜力；品牌差异化与装饰偏好。低优先级目标不得覆盖高优先级门槛。
+
 ## 工作边界
 
 - 采用 **100% AI 整图生成**。商品、背景、场景、标题、说明、数字、单位、尺寸标线、卡片、圆窗、图标、箭头、阴影和装饰必须在同一完整画面中由图像模型生成，或由图像模型对整图进行编辑。
@@ -29,6 +31,7 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 ```text
 商品识别与事实卡
 → 确认区域与平台、图片语言、视觉风格
+→ 读取平台通用规则与唯一匹配的条件分支
 → 提示资料清单并补全阻塞事实
 → 确认用户选择的图片类型；未选则分析后推荐
 → 建立套图说服链路和逐图主决策任务
@@ -52,6 +55,7 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 - 会阻塞生成的缺失信息。
 - 可推荐但必须确认的创意选择。
 - 禁止推断的参数和宣称。
+- 声明与证据四态台账，以及 `shopper_job`、主要购买异议、信息不确定性和退货风险驱动因素。
 
 不得重复询问可以从清晰素材中可靠识别的信息。
 
@@ -66,6 +70,8 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 3. 视觉风格。
 
 每题给出 2～3 个适合当前商品的选项并标明推荐项。推荐不等于确认；只有用户逐项选择，或在三题推荐均已展示后明确回复“全部按推荐”，才可继续。确认后回显一行摘要。
+
+摘要确认后立即完整读取 [平台通用规则与条件路由](references/platform-rules.md)，再只读取唯一匹配的条件分支：Amazon US Listing 读取 [Amazon US Listing 图片规则](references/platform-amazon-us.md)，TikTok Shop 读取 [TikTok Shop 图片规则](references/platform-tiktok-shop.md)，其他平台只使用通用规则并记录发布前官方核验要求。平台未确认时不得猜测分支，不得同时加载无关分支。
 
 其余尺寸、材质、数量、包装内容、目标人群、Logo 和宣称依据按阻塞程度分批询问，每轮 1～3 个问题。
 
@@ -100,7 +106,7 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 - 步骤图可呈现 2～4 个步骤，因为它们共同解决“如何使用”的问题。
 - 不得在一张图中同时解决两个无关的购买问题。
 
-生成前必须完成 [套图蓝图](references/image-set-blueprints.md) 定义的逐图策划卡、文字覆盖统计和套图多样性统计。每张非干净主图必须明确框架 ID 或 `X01`、P/T/E、商品位置/占比/视角、文字区、证据区、主轴、视觉动线、有效留白、组件 ID 或 `NONE`、字体层级和色彩比例；任一字段缺失即 `generation_ready=false`。批量任务还须先完成计划结构指纹分配表。文案放不下时先缩短或重构版式，不得把全部文字等比缩小。
+生成前必须完成 [套图蓝图](references/image-set-blueprints.md) 定义的逐图策划卡、文字覆盖统计和套图多样性统计。每张非干净主图必须明确框架 ID 或 `X01`、P/T/E、商品位置/占比/视角、文字区、证据区、主轴、视觉动线、有效留白、组件 ID 或 `NONE`、字体层级和色彩比例；每张图还必须填写 `claim_ids`、`shopper_job`、`objection_resolved` 和 `return_risk_reduced`，不适用项写 `NONE + 理由`。任一字段缺失或存在未解决的 `PLACEHOLDER`、`BLOCKED`、未满足条件的 `CONDITIONAL` 声明，即 `generation_ready=false`。批量任务还须先完成计划结构指纹分配表。文案放不下时先缩短或重构版式，不得把全部文字等比缩小。
 
 逐字文案进入生成前必须通过以下门槛：
 
@@ -161,6 +167,7 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 - 每张都使用全部商品原图、商品身份锁、视觉锁定卡、该图策划单和最终逐字文案，不把上一张生成图作为唯一身份参考。
 - 除平台纯白/干净首图外，每张图都继承同一套色彩 DNA；只能改变配色比例和明暗，不能另起一套无关色系。
 - 最终提示必须逐项携带 [转化设计系统](references/conversion-design-system.md) 定义的框架 ID、P/T/E、主轴、阅读路径、镜头、文字角色、逐字允许清单、披露字段、证据绑定、组件、字体层级、色彩比例和禁止项；`DISCLOSURE` 默认写 `NONE`，模拟测试同样如此。只写商品、场景与风格不得调用图像模型。
+- 进入最终提示的每条事实文案必须已绑定内部 `claim_id`，且状态为 `VERIFIED` 或已满足全部条件的 `CONDITIONAL`；`claim_id`、状态名、证据来源和 `PLACEHOLDER` 保留在非像素台账中，不作为模型应渲染的文字。
 - 所有元素一次由图像模型生成。需要修正时只能让图像模型编辑整图，并明确只改目标问题、保持商品身份和套图视觉 DNA；不得把文字、数字、标线或组件交给脚本补画。
 - `marketing_hero` 固定包含一个从属价值说明 `subtitle`，并使用 1～2 组 `label/detail` 证据表达，其中至少一组完整配对。其他营销图按 [转化设计系统](references/conversion-design-system.md) 选择 `headline`、`label`、`detail` 或组合；`label/detail` 不因角色被禁用，同图通常不超过 3 组且均须服务同一主任务。是否采用直接标注或事实卡由图片任务、证据数量和构图空间决定。
 - 为整套记录 4～6 个卖点及每张图的主任务、证据、用户价值、文字模式和消疑角色；这是内容台账，不是像素生成或排版脚本。
@@ -172,7 +179,7 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 
 ### 8. 验收和交付
 
-完整读取 [平台与发布规则](references/platform-rules.md)、[视觉 QA 与回归检查](references/qa-and-regression.md) 和 [生成执行与成图观察验收](references/execution-and-observed-qa.md)。先运行 `scripts/validate_execution_manifest.py` 检查清单字段、唯一性和文件绑定，再完成全尺寸视觉观察；脚本通过不能替代像素级 QA。
+重新使用 [平台通用规则与条件路由](references/platform-rules.md) 和已选平台分支，并完整读取 [视觉 QA 与回归检查](references/qa-and-regression.md) 与 [生成执行与成图观察验收](references/execution-and-observed-qa.md)。先运行 `scripts/validate_execution_manifest.py` 检查清单字段、唯一性和文件绑定，再完成全尺寸视觉观察；脚本通过不能替代像素级 QA。
 
 交付目录必须区分内部参考资产与正式套图：`source/` 只保存商品原图、无字身份角度和其他内部身份锚点，`set/` 只保存用户可用的最终套图。套图张数、联系表、网站样例、表格嵌图和用户预览默认只读取 `set/`，不得把 `source/`、基准图、身份参考图或 QA 图混入正式套图；需要交付源资产时也必须单独标为“内部参考/源素材”，不能与套图连续编号或并排展示。
 
@@ -185,12 +192,16 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 
 没有货架盲测或真实 A/B 数据时，只能写“点击潜力通过/未通过”，不得宣称已经提升点击率。
 
+仅在用户要求 A/B 建议时，输出一个变量、一个假设、一个主要指标和一个复盘/停止规则；不得承诺 CTR、CVR、排名或销量提升。
+
 ## 核心零容忍项
 
 出现任一项即返工：
 
 - 商品身份、颜色、结构、数量、文字、Logo、数字或尺寸错误。
 - 使用无依据宣称，或把在非像素记录中标为设计预览的素材误判为可发布主图。
+- 客户可见事实缺少 `claim_id`，使用 `PLACEHOLDER`、`BLOCKED` 或未满足条件的 `CONDITIONAL` 声明，或把内部 ID、状态名和证据记录生成进图片。
+- 未读取通用平台规则与唯一匹配的条件分支，混用 Amazon US 与 TikTok Shop 规则，或在所需平台/品类政策未核验时标记为发布候选。
 - 用户未明确要求时，成图出现 `DESIGN PREVIEW`、`SIMULATED`、`NOT PUBLISHABLE`、`SIMULATED DIMENSIONS` 或其他模拟/不可发布状态文字；即使拼写正确、字号很小或只出现在页脚也必须返工。
 - 营销图遮住文字后只剩通用商品照。
 - 标题只是放在剩余空白处，与商品或证据区没有结构关系。
@@ -231,6 +242,8 @@ description: 根据商品原图和已确认资料，为 Amazon、TikTok Shop 等
 - [framework-library.md](references/framework-library.md)：15 个框架的唯一完整定义、选择接口、静态资产和适配矩阵。
 - [layout-components.md](references/layout-components.md)：小卡片、圆形细节窗、状态标签等 8 个可选从属组件及使用预算。
 - [conversion-design-system.md](references/conversion-design-system.md)：框架选择原则、版式、文字、视觉证据、提示结构和评分。
-- [platform-rules.md](references/platform-rules.md)：平台首图、AI图片发布边界和发布资格。
+- [platform-rules.md](references/platform-rules.md)：跨平台共同规则、条件路由、AI 图片发布边界和发布资格。
+- [platform-amazon-us.md](references/platform-amazon-us.md)：仅在 Amazon US Listing MAIN/Secondary 任务中读取的差异规则。
+- [platform-tiktok-shop.md](references/platform-tiktok-shop.md)：仅在 TikTok Shop 任务中读取的差异规则。
 - [qa-and-regression.md](references/qa-and-regression.md)：逐张视觉检查、回归场景和交付结论。
 - [execution-and-observed-qa.md](references/execution-and-observed-qa.md)：任务输出直接绑定、计划值与成图观察值、实际组件计数、功能证据元组和尺寸语义映射。

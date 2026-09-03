@@ -1,6 +1,6 @@
 # 视觉 QA 与回归检查
 
-逐张打开源图和成图目视比对，不要求用户运行检查程序。先按 [生成执行与成图观察验收](execution-and-observed-qa.md) 检查任务绑定并记录成图观察值，再执行零容忍门槛，最后按 [转化设计系统](conversion-design-system.md) 评分。提示词、策划卡和计划统计不能代替最终像素观察。
+逐张打开源图和成图目视比对，不要求用户运行检查程序。先按 [生成执行与成图观察验收](execution-and-observed-qa.md) 检查任务绑定并记录成图观察值，再按 [平台通用规则与条件路由](platform-rules.md) 及唯一匹配的平台分支检查发布资格，然后执行零容忍门槛，最后按 [转化设计系统](conversion-design-system.md) 评分。提示词、策划卡和计划统计不能代替最终像素观察。
 
 ## 目录
 
@@ -18,6 +18,14 @@
 |---|---|---|
 | `total_images` | 套图总张数 | 7、8 或 9 |
 | `clean_main_count` | 平台干净主图数 | 0 或 1；其文字角色为 0 |
+| `platform_branch_loaded` | 已读取通用平台规则和唯一匹配的条件分支；其他平台记录为 COMMON_ONLY | `AMAZON_US` / `TIKTOK_SHOP` / `COMMON_ONLY`，不得混用 |
+| `purchase_decision_fields_complete_images` | 已填写 shopper_job、objection_resolved、return_risk_reduced；不适用项含 NONE+理由 | 等于 `total_images` |
+| `claim_id_mapping_errors` | 客户可见事实没有 claim_id，或映射到错误证据 | `0` |
+| `placeholder_leak_images` | allowed_text_exact、提示词或成图出现 PLACEHOLDER / NEEDS INPUT | `0` |
+| `blocked_or_unresolved_conditional_claim_images` | 使用 BLOCKED 或未满足条件的 CONDITIONAL 声明 | `0` |
+| `conditional_qualifier_legibility_errors` | 必需限定词/免责声明缺失、远离声明或移动端不可读 | `0` |
+| `amazon_policy_record_complete` | Amazon US 是否保留品类、来源、核验日期、状态和品类覆盖规则字段；未知值明确写 UNKNOWN | Amazon US 为 `true`；其他平台为 `N/A` |
+| `amazon_publish_policy_verified` | Amazon US 发布候选是否在本次任务内完成当前品类政策核验 | 发布候选为 `true`；设计预览及其他平台为 `N/A` |
 | `product_copy_images` | 至少有一种商品信息文案角色的图片数；披露不计 | 达到 [套图蓝图](image-set-blueprints.md) 对应 7/8/9 配额 |
 | `non_clean_textless` | 非干净主图且所有商品信息文案角色均为 0 | `<=1`，且每张有合格例外码 |
 | `visible_status_disclosure_images` | 成图出现 DESIGN PREVIEW/SIMULATED/NOT PUBLISHABLE/SIMULATED DIMENSIONS 等状态文字 | 用户未明确批准时为 `0` |
@@ -60,6 +68,10 @@
 - Logo、标签、包装文字、销售数量和包装内容是否准确。
 - 尺寸数字、单位和尺寸线是否与商品事实卡逐项一致。
 - 卖点和宣称是否有用户确认的事实或证据。
+- 每条客户可见事实、数字、数量、材质、兼容、性能、比较、认证、效果或包装内容表述是否关联正确 `claim_id`，且状态为 `VERIFIED` 或已经满足全部条件的 `CONDITIONAL`。
+- `PLACEHOLDER` 是否只存在于非像素台账，完全没有进入 `allowed_text_exact`、图像模型提示和成图；`BLOCKED` 是否没有通过文字、徽章、图标、场景或效果被暗示。
+- `CONDITIONAL` 声明的限定词或免责声明是否与声明邻近、逐字准确并在移动端可读；无法容纳时是否已删除声明，而不是缩成页脚小字。
+- `claim_id`、状态名、证据来源和风险动作是否只存在于内部记录，没有被生成到图片中。
 - 人物动作、握持、穿戴和商品使用关系是否真实。
 - 模拟状态、AI 来源和发布资格是否只记录在文件名、事实卡、策划卡、执行清单与交付报告中；用户未明确要求时，成图是否完全没有 `DESIGN PREVIEW`、`SIMULATED`、`NOT PUBLISHABLE` 或 `SIMULATED DIMENSIONS`。
 
@@ -68,6 +80,7 @@
 ### 2. 主决策任务和信息密度
 
 - 这张图解决的主要购买问题是否能用一句话说清。
+- `shopper_job`、`objection_resolved` 和 `return_risk_reduced` 是否完整，并与商品事实卡中的真实购买异议和退货风险一致；`NONE` 是否附有理由。
 - 主结论、视觉证据和从属信息是否服务同一个问题。
 - 是否错误地把两个无关购买问题或多个同权重卖点挤在一起。
 - 尺寸图的多项尺寸、步骤图的连续步骤和包装清单的多个物品是否仍属于同一任务。
@@ -154,7 +167,11 @@
 
 ### 6. 平台与发布资格
 
-- Amazon MAIN 和 TikTok Shop 干净首图是否满足 [平台与发布规则](platform-rules.md)。
+- 是否先满足 [平台通用规则与条件路由](platform-rules.md)，再只使用唯一匹配的平台分支；Amazon US 是否读取 [Amazon US Listing 图片规则](platform-amazon-us.md)，TikTok Shop 是否读取 [TikTok Shop 图片规则](platform-tiktok-shop.md)。
+- Amazon US 是否保留 `amazon_category`、`policy_source`、`policy_checked_at`、`policy_status` 和 `category_overrides` 字段，未知值是否明确写 `UNKNOWN`；是否在本次制作或交付任务内完成核验，`UNVERIFIED` 时是否只标为设计预览。
+- Amazon MAIN 是否显示准确 SKU、变体和数量，使用合规纯白背景与商品占比，并保持文字、组件、营销图形和误导性道具为 0；Secondary 是否正确区分内容物与场景道具。
+- Amazon US 是否没有伪造 Amazon 徽章、评级、评论数、认证、专家背书、测试读数或可识别竞品；高风险/受监管品类是否完成证据和当前品类政策升级检查。
+- TikTok Shop 干净首图是否满足其目标站点、品类、背景、文字、组件和销售配置规则，且没有误导促销、虚假折扣或平台仿冒标识。
 - 营销首图是否被错误当作禁止文字的第一张商品图。
 - AI 纯生成或重绘商品身份的图片是否已在文件名、策划卡、执行清单和交付报告中明确标为设计预览，同时没有默认把该状态烧进图片。
 - 视觉 QA 与发布资格是否分别给出结论。
@@ -166,6 +183,9 @@
 
 - 商品身份、颜色、结构、数量、文字、Logo、数字或尺寸错误。
 - 无依据宣称、错误平台用途或错误发布资格。
+- 任一客户可见事实缺少 `claim_id`，使用 `PLACEHOLDER`、`BLOCKED` 或未满足条件的 `CONDITIONAL` 声明，或把内部 ID、状态名、证据来源生成进图片。
+- 必需限定词/免责声明缺失、远离对应声明、逐字错误或在移动端不可读；不得用缩小成页脚小字规避。
+- 未加载通用平台规则和唯一匹配的条件分支，混用 Amazon US 与 TikTok Shop 规则，或在 Amazon 政策核验记录不完整时标为发布候选。
 - 套图机械统计任一必填字段为空，或任何要求为 0 的字段不为 0；未制作全套联系表就判定通过。
 - 用户未明确要求时，任一成图出现 `DESIGN PREVIEW`、`SIMULATED`、`NOT PUBLISHABLE`、`SIMULATED DIMENSIONS` 等模拟/不可发布状态文字；或把用户明确批准的披露计入商品信息文案。
 - 任一非干净主图缺少框架 ID、P/T/E、主轴、视觉动线、镜头、文字角色、允许文字清单、证据绑定、组件、字体层级或色彩比例策划记录；最终提示 16 个必填字段不完整。
@@ -221,6 +241,19 @@
 3. 用户在三题推荐均已展示后回复“全部按推荐”：允许继续并回显摘要。
 4. 缺少尺寸：不猜测，改用替代主题。
 5. 用户要求未经证实的认证或绝对化效果：拒绝写入图片。
+6. 缺失性能值以 `[NEEDS INPUT: ...]` 记录：只允许留在声明台账；若进入 `allowed_text_exact`、提示词或成图则失败。
+7. `CONDITIONAL` 声明需要免责声明但移动端放不下：删除该声明或标为 `BLOCKED`；缩成不可读小字后继续生成属于失败。
+8. `BLOCKED` 声明没有写进文案，但通过徽章、光效、医生形象或夸张结果被视觉暗示：失败。
+
+### 平台条件路由
+
+1. Amazon US Listing 请求：读取通用规则与 Amazon US 分支，不读取 TikTok Shop 分支；继续动态规划 7～9 张，不固定为六图，也不进入 A+。
+2. TikTok Shop 请求：读取通用规则与 TikTok Shop 分支，不读取 Amazon US 分支；既有干净首图与营销图行为保持不变。
+3. 其他平台请求：只使用通用规则并记录官方核验要求；自动套用 Amazon 的 85% 或 TikTok 首图规则属于失败。
+4. Amazon MAIN 加入主标题、卖点、圆窗、卡片、非商品 Logo 或可能误认为随附的道具：失败；固定使用平台网格和 `组件：NONE`。
+5. Amazon MAIN 经 AI 整图生成或编辑后，商品结构、比例、Logo、标签或包装无法与真实原图核验：只能标为设计预览；不得因画面逼真而标为发布候选。
+6. Amazon 高风险或受监管品类缺少证据、当前品类政策核验或必要免责声明：可继续制作不使用该声明的安全预览，不能给出发布候选。
+7. Amazon 图片使用关键词堆砌，并把图片文字声称为可索引 SEO：失败；改为自然美式文案并把搜索词留在非像素 Listing 策略记录。
 
 ### 主决策任务
 
@@ -358,5 +391,8 @@
 - 商品身份、事实、文字、尺寸、市场契合和套图统一性结论。
 - 每张图的视觉 QA 与发布资格。
 - 仍需人工复核的内容。
+- 声明与证据台账、placeholder/blocked/conditional 结论，以及匹配的平台分支和政策核验记录。
 
 只能写“点击潜力通过”或“点击潜力未通过”。没有货架盲测或真实 A/B 数据时，不声称已提升点击率。
+
+只有用户明确要求 A/B 建议时才输出，并固定记录：一个变量、一个假设、一个主要指标、一个复盘或停止规则。不得承诺 CTR、CVR、排名或销量提升。
